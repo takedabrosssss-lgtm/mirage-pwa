@@ -96,6 +96,10 @@ def health_v111():
 v11._replace_endpoint("/api/phantom", "GET", phantom_v111)
 v11._replace_endpoint("/api/health", "GET", health_v111)
 
+# v1.2: restore autonomous strategy scanning from the original Telegram engine,
+# switch the PWA to the same strict signal-quality model and harden REST retries.
+import mirage_runtime_v12  # noqa: E402,F401
+
 
 if __name__ == "__main__":
     import os
@@ -108,3 +112,4 @@ if __name__ == "__main__":
         workers=1,
         reload=core.APP_ENV == "development",
     )
+
