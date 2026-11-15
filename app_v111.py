@@ -1,9 +1,4 @@
-"""MIRAGE v1.1.1 entry-safety overlay.
-
-This thin layer imports the established v1.1 runtime and adds a hard PHANTOM
-entry gate. It deliberately leaves the original trading calculations, Funding
-logic, WebSocket handlers, and open-position manager untouched.
-"""
+"""MIRAGE v1.1.1 entry-safety overlay with v1.2.1 DB fix."""
 from __future__ import annotations
 
 import time
@@ -18,7 +13,6 @@ app = core.app
 
 
 def _base_phantom_status(user, db) -> dict:
-    """Use the same per-account PHANTOM state that the dashboard displays."""
     status = v11.phantom_v11(user=user, db=db)
     now = time.time()
     failures = entry_gate_failures(
@@ -27,8 +21,6 @@ def _base_phantom_status(user, db) -> dict:
         float(core.market.status.checked_at or 0),
         now,
     )
-    # Preserve the v1.1 per-account open-position quote check as part of the
-    # entry decision. A stale position quote keeps that account in PROTECTIVE.
     stale_position_checks = [
         check for check in status.get("checks", [])
         if check.get("name") == "Open-position quotes" and not check.get("ok", False)
@@ -54,8 +46,6 @@ def _base_phantom_status(user, db) -> dict:
     return status
 
 
-# Wrap the v1.1 open_trade patch rather than replacing its fee/risk/position
-# sizing behavior. The underlying RLock is re-entrant, so both guards are safe.
 _previous_open_trade = core.open_trade
 
 
@@ -84,7 +74,7 @@ def health_v111():
         float(core.market.status.checked_at or 0),
         now,
     )
-    result["version"] = "1.1.1"
+    result["version"] = "1.2.1"
     result["entry_feed_gate"] = {
         "allowed": not failures,
         "block_reasons": failures,
@@ -96,8 +86,11 @@ def health_v111():
 v11._replace_endpoint("/api/phantom", "GET", phantom_v111)
 v11._replace_endpoint("/api/health", "GET", health_v111)
 
-# v1.2: restore autonomous strategy scanning from the original Telegram engine,
-# switch the PWA to the same strict signal-quality model and harden REST retries.
+# IMPORTANT: run the BIGINT migration and safe transaction wrapper before
+# importing the v1.2 scanner, which captures core.open_trade at import time.
+import mirage_db_fix_v12  # noqa: E402,F401
+
+# v1.2 strategy scanning and Binance REST retry hardening.
 import mirage_runtime_v12  # noqa: E402,F401
 
 
@@ -112,4 +105,3 @@ if __name__ == "__main__":
         workers=1,
         reload=core.APP_ENV == "development",
     )
-
