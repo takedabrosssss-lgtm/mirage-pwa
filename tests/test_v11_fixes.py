@@ -5,6 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from mirage_v11_fixes import (
+    entry_gate_failures,
     epoch_ms,
     funding_start_ms,
     is_usdm_payload,
@@ -94,3 +95,46 @@ def test_ticker_updates_do_not_mask_stalled_mark_price_feed():
     assert relevant_quote_message("market", {"e": "markPriceUpdate", "s": "BTCUSDT"})
     assert relevant_quote_message("public", {"e": "bookTicker", "s": "BTCUSDT"})
     assert not relevant_quote_message("public", {"e": "depthUpdate", "s": "BTCUSDT"})
+
+
+def healthy_state(now=1000.0):
+    return {
+        "market_connected": True,
+        "market_last_message": now - 1,
+        "public_connected": True,
+        "public_last_message": now - 1,
+    }
+
+
+def test_entry_gate_allows_only_fresh_rest_and_both_live_feeds():
+    assert entry_gate_failures(healthy_state(), True, 990.0, 1000.0) == []
+
+
+def test_entry_gate_blocks_when_rest_fallback_is_available_but_websockets_are_down():
+    state = healthy_state()
+    state["market_connected"] = False
+    state["public_connected"] = False
+    failures = entry_gate_failures(state, True, 990.0, 1000.0)
+    assert any("Mark Price WebSocket is disconnected" in item for item in failures)
+    assert any("Bid/Ask WebSocket is disconnected" in item for item in failures)
+
+
+def test_entry_gate_blocks_one_stale_websocket_even_if_other_is_healthy():
+    state = healthy_state()
+    state["market_last_message"] = 980.0
+    failures = entry_gate_failures(state, True, 990.0, 1000.0)
+    assert any("Mark Price WebSocket is stale" in item for item in failures)
+    assert not any("Bid/Ask WebSocket" in item for item in failures)
+
+
+def test_entry_gate_blocks_unavailable_or_old_rest_market_status():
+    assert entry_gate_failures(healthy_state(), False, 990.0, 1000.0)
+    assert any("older than 15 minutes" in item for item in
+               entry_gate_failures(healthy_state(), True, 1.0, 1000.0))
+
+
+def test_entry_gate_rejects_future_feed_timestamps():
+    state = healthy_state(now=1000.0)
+    state["public_last_message"] = 2000.0
+    assert any("Bid/Ask WebSocket is stale" in item for item in
+               entry_gate_failures(state, True, 990.0, 1000.0))
