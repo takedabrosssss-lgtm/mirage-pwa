@@ -1,0 +1,19 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+packages:
+  - docker.io
+  - docker-compose-v2
+  - git
+  - curl
+  - ufw
+  - python3
+
+runcmd:
+  - [bash, -lc, "systemctl enable --now docker"]
+  - [bash, -lc, "git clone --depth 1 https://github.com/takedabrosssss-lgtm/mirage-pwa.git /opt/mirage"]
+  - [bash, -lc, "chown -R ubuntu:ubuntu /opt/mirage"]
+  - [bash, -lc, "ufw allow OpenSSH"]
+  - [bash, -lc, "ufw allow 80/tcp"]
+  - [bash, -lc, "ufw allow 443/tcp"]
+  - [bash, -lc, "ufw --force enable"]
