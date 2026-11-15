@@ -1,0 +1,185 @@
+MIRAGE v1.1.1 — OCI FREE HOSTING OVERLAY
+========================================
+
+ВАЖНО ДО НАЧАЛА
+---------------
+Этот архив — OVERLAY к существующему репозиторию mirage-pwa, а не замена всего
+проекта. Он добавляет Docker Compose, PostgreSQL, HTTPS, обновление DuckDNS,
+резервное копирование и одноразовую генерацию производственных секретов.
+
+Oracle Cloud Always Free — единственный выбранный здесь бесплатный кандидат
+на постоянно работающую VM, но не гарантия бесперебойной работы. Oracle
+официально может изымать бесплатные VM, если за 7 дней они проходят критерии
+простоя. Не полагайтесь на бесплатный сервер как на гарантированный механизм
+исполнения стопов/тейк-профитов. Пока идёт проверка MIRAGE, Auto Paper Trading
+должен оставаться выключенным.
+
+ЧТО ДОБАВЛЯЕТСЯ В РЕПОЗИТОРИЙ
+----------------------------
+- docker-compose.yml — приложение + PostgreSQL + HTTPS reverse proxy.
+- Caddyfile — автоматический HTTPS и проксирование на MIRAGE.
+- .dockerignore — не позволяет включить .env, базу и резервные копии в Docker-образ.
+- oci/cloud-init.yaml — начальная установка Docker на Ubuntu 24.04 ARM.
+- scripts/prepare_server.py — одноразово создаёт секреты и 4 случайных пароля.
+- scripts/update_duckdns.sh — обновляет бесплатный DNS-адрес.
+- scripts/backup_db.sh — создаёт сжатую резервную копию PostgreSQL.
+
+НЕ ЗАМЕНЯТЬ И НЕ УДАЛЯТЬ
+-----------------------
+Оставить app.py, app_v11.py, app_v111.py, mirage_v11_fixes.py, market.py,
+trading.py, news.py, requirements.txt, Dockerfile, Procfile, static/,
+tests/, .github/ и существующие файлы без изменений.
+Загрузить содержимое ZIP в корень уже существующего репозитория.
+Если GitHub спросит о замене существующих файлов, заменять только те файлы,
+которые явно перечислены в разделе «Что добавляется» и уже существуют.
+Не загружать .env или MIRAGE_ACCOUNTS.txt — их в архиве нет.
+
+ЧАСТЬ 1. ЗАГРУЗИТЬ OVERLAY В GITHUB
+-----------------------------------
+1. Откройте https://github.com/takedabrosssss-lgtm/mirage-pwa
+2. Убедитесь, что выбрана ветка main.
+3. Нажмите Add file → Upload files.
+4. Распакуйте ZIP.
+5. Загрузите содержимое архива, сохраняя структуру папок:
+   docker-compose.yml
+   Caddyfile
+   .dockerignore
+   oci/cloud-init.yaml
+   scripts/prepare_server.py
+   scripts/update_duckdns.sh
+   scripts/backup_db.sh
+   MIRAGE_OCI_FREE_DEPLOY.txt
+6. Нажмите Commit changes.
+7. Откройте Actions и дождитесь зелёного результата MIRAGE tests.
+
+ЧАСТЬ 2. СОЗДАТЬ ORACLE CLOUD FREE TIER
+---------------------------------------
+1. Откройте https://www.oracle.com/cloud/free/ и создайте только один аккаунт
+   на свои настоящие данные. Oracle требует карту для проверки личности; банк
+   может показать временную авторизационную блокировку.
+2. Внимательно выберите Home Region при регистрации. Для Украины можно
+   рассмотреть Warsaw или Frankfurt, если эти регионы доступны в форме.
+   Домашний регион важен для Always Free compute и блокового хранилища.
+3. Не нажимайте Upgrade to Pay As You Go и не создавайте ресурсы, не помеченные
+   как Always Free. Не используйте платные trial-ресурсы.
+4. В Oracle Console откройте Cloud Shell (иконка терминала в верхней панели).
+   Создайте SSH-ключ прямо там, чтобы не скачивать приватный ключ на телефон:
+
+   mkdir -p ~/.ssh && chmod 700 ~/.ssh
+   ssh-keygen -t ed25519 -f ~/.ssh/mirage_oci -N ""
+   cat ~/.ssh/mirage_oci.pub
+
+   Скопируйте показанный публичный ключ. Приватный файл ~/.ssh/mirage_oci
+   никому не отправляйте.
+5. В консоли Oracle откройте Compute → Instances → Create instance.
+6. Имя: mirage-paper-server.
+7. Image: Ubuntu 24.04 ARM64 (Canonical).
+8. Shape: VM.Standard.A1.Flex. Выберите 1 OCPU и 6 GB RAM. Не превышайте
+   бесплатный совокупный лимит A1: 2 OCPU и 12 GB RAM на весь tenancy.
+9. Boot volume: стандартные 50 GB. Не добавляйте отдельные платные volumes.
+10. Networking: public subnet и назначить public IPv4 address.
+11. SSH keys: вставьте публичный ключ из шага 4.
+12. В Advanced options → Initialization script вставьте целиком содержимое
+    файла oci/cloud-init.yaml из этого архива.
+13. Создайте VM и дождитесь статуса Running. Дождитесь завершения cloud-init.
+
+ПОДКЛЮЧЕНИЕ К VM ИЗ CLOUD SHELL
+-------------------------------
+В Cloud Shell выполните команду, заменив PUBLIC_IP_АДРЕС на Public IPv4
+address созданной VM:
+
+  ssh -i ~/.ssh/mirage_oci ubuntu@PUBLIC_IP_АДРЕС
+
+Если SSH не подключается, проверьте, что в Security List/NSG разрешён входящий
+TCP 22 и cloud-init завершился. Не удаляйте и не пересоздавайте VM наугад.
+
+ЧАСТЬ 3. ОТКРЫТЬ ТОЛЬКО НУЖНЫЕ ВХОДЯЩИЕ ПОРТЫ
+----------------------------------------------
+В OCI откройте VCN → нужную VCN → Security Lists (или Network Security Groups)
+и добавьте ingress rules:
+- Source CIDR: 0.0.0.0/0; Protocol: TCP; Destination port: 80.
+- Source CIDR: 0.0.0.0/0; Protocol: TCP; Destination port: 443.
+Порт 22 должен быть разрешён для SSH (обычно правило уже создаётся при
+создании сети). Не открывайте порт 8000 или 5432: приложение и PostgreSQL
+должны быть доступны только внутри Docker-сети.
+
+ЧАСТЬ 4. БЕСПЛАТНЫЙ HTTPS-АДРЕС И ЗАПУСК
+---------------------------------------
+1. Откройте https://www.duckdns.org/ и войдите удобным способом.
+2. Создайте один свободный поддомен, например mirage-demo.duckdns.org.
+   Не копируйте пример, если он уже занят — выберите собственное имя.
+3. Скопируйте DuckDNS token. Не отправляйте его никому и не вставляйте в GitHub.
+4. В SSH-сеансе VM выполните:
+
+   cd /opt/mirage
+   sudo python3 scripts/prepare_server.py
+
+5. Введите имя поддомена (можно целиком, например mirage-demo.duckdns.org),
+   затем DuckDNS token. Ввод токена скрыт.
+6. Скрипт проверит DuckDNS, создаст APP_SECRET и пароль PostgreSQL, а также
+   четыре случайных пароля для аккаунтов owner, user2, user3, user4.
+7. Сохраните показанные логины/пароли. Копия будет в файле
+   /home/ubuntu/MIRAGE_ACCOUNTS.txt. Не загружайте этот файл в GitHub и не
+   пересылайте его в общий чат. У каждого аккаунта будет виртуальный баланс
+   10 000 USDT. owner получит роль admin.
+8. Запустите приложение:
+
+   cd /opt/mirage
+   sudo docker compose up -d --build
+
+9. Проверьте контейнеры:
+
+   sudo docker compose ps
+   sudo docker compose logs --tail=100 app
+   sudo docker compose logs --tail=100 caddy
+
+10. Откройте в браузере https://ВАШ-ПОДДОМЕН.duckdns.org/api/health
+    Caddy может потратить несколько минут на получение первого сертификата.
+    Не пытайтесь многократно пересоздавать сертификат/VM, если DNS ещё
+    распространяется; сначала посмотрите журнал Caddy.
+
+ЧАСТЬ 5. ПРОВЕРКА MIRAGE ПЕРЕД ИСПОЛЬЗОВАНИЕМ
+---------------------------------------------
+В /api/health проверьте:
+- app = MIRAGE;
+- version = 1.1.1;
+- paper_only = true;
+- real_orders_enabled = false;
+- entry_feed_gate.allowed = true только после подключения REST и обоих
+  WebSocket потоков Binance USDⓈ-M.
+
+Откройте само приложение и войдите под owner. PHANTOM должен стать ACTIVE,
+а New paper entries — Allowed только когда сервер действительно получает
+свежие данные. Не включайте Auto Paper Trading до отдельной проверки
+открытия/ведения/закрытия Paper Trading позиции и корректности всех комиссий,
+спреда, проскальзывания, Funding, SL и TP.
+
+РЕЗЕРВНЫЕ КОПИИ И СОХРАННОСТЬ ДАННЫХ
+-----------------------------------
+- Ежедневная копия PostgreSQL создаётся автоматически в /var/backups/mirage.
+- Хранятся последние 7 дней резервных копий.
+- Создать копию вручную:
+  sudo /opt/mirage/scripts/backup_db.sh
+- Скачивайте копию на отдельное устройство регулярно. Резервная копия на том
+  же VM-диске не защитит от удаления/изъятия всей VM.
+- Для обычного перезапуска используйте:
+  sudo docker compose restart
+- Для обновления кода после коммита в GitHub:
+  cd /opt/mirage && sudo git pull && sudo docker compose up -d --build
+- НИКОГДА не выполняйте `docker compose down -v`: команда удалит том базы.
+  Не удаляйте volume mirage_postgres_data.
+- Не удаляйте и не заменяйте .env: в нём секрет ключа, пароль базы и первичная
+  конфигурация аккаунтов. Если пользователи уже созданы, их пароли не меняются
+  через BOOTSTRAP_USERS_JSON — bootstrap выполняется только на пустой БД.
+
+БЕЗОПАСНОСТЬ И ОГРАНИЧЕНИЯ
+-------------------------
+1. В этой конфигурации нет Binance API keys и нет отправки реальных ордеров.
+2. При остановке/изъятии VM никакой сервер не сможет отслеживать Paper SL/TP;
+   виртуальные стопы не являются биржевыми ордерами.
+3. Oracle официально оставляет за собой право reclaim idle Always Free Compute.
+   Для этой VM это означает риск недоступности без предупреждения в случае
+   выполнения критериев простоя. У бесплатного тарифа нет SLA.
+4. Oracle требует карту для проверки и может делать временные authorization
+   holds. Создавайте только перечисленные ресурсы Always Free.
+5. Не включайте Auto Paper Trading, пока не завершены все отдельные тесты.

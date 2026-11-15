@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Run scripts/prepare_server.py first}
+      POSTGRES_USER: ${POSTGRES_USER:?Run scripts/prepare_server.py first}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run scripts/prepare_server.py first}
+    volumes:
+      - mirage_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      APP_SECRET: ${APP_SECRET:?Run scripts/prepare_server.py first}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      BOOTSTRAP_USERS_JSON: ${BOOTSTRAP_USERS_JSON:?Run scripts/prepare_server.py first}
+      MARKET_REGION_LABEL: ${MARKET_REGION_LABEL:-OCI}
+      SERVER_REGION_LABEL: ${SERVER_REGION_LABEL:-OCI-ARM64}
+      BINANCE_FUTURES_BASE_URL: https://fapi.binance.com
+      BINANCE_FUTURES_MARKET_WS_URL: wss://fstream.binance.com/market/stream?streams=!markPrice@arr@1s/!ticker@arr
+      BINANCE_FUTURES_PUBLIC_WS_URL: wss://fstream.binance.com/public/stream?streams=!bookTicker
+      SCAN_UNIVERSE_SIZE: "10"
+      LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).read()"]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 60s
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      MIRAGE_DOMAIN: ${MIRAGE_DOMAIN:?Run scripts/prepare_server.py first}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  mirage_postgres_data:
+  caddy_data:
+  caddy_config:
