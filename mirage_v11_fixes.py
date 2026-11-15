@@ -12,11 +12,7 @@ from typing import Any
 
 
 def epoch_ms(value: int | float) -> int:
-    """Normalize Unix seconds or milliseconds to milliseconds.
-
-    Binance funding timestamps are milliseconds. MIRAGE v1.0 stored
-    opened_at/last_funding_time in seconds, so this accepts both formats.
-    """
+    """Normalize Unix seconds or milliseconds to milliseconds."""
     number = int(value)
     if number <= 0:
         return 0
@@ -123,3 +119,46 @@ def recent_failures_exceeded(timestamps: list[float], now: float, window: float,
     recent = [stamp for stamp in timestamps if 0 <= now - stamp < window]
     timestamps[:] = recent
     return len(recent) >= limit
+
+
+def entry_gate_failures(
+    ws_state: Mapping[str, Any],
+    rest_ok: bool,
+    rest_checked_at: float,
+    now: float,
+    *,
+    websocket_max_age: float = 12.0,
+    rest_max_age: float = 900.0,
+) -> list[str]:
+    """Fail-closed gate for opening positions.
+
+    REST fallback is intentionally insufficient for new entries: both separate
+    live feeds must be connected and recently deliver their own quote messages.
+    """
+    failures: list[str] = []
+
+    if not rest_ok:
+        failures.append("Binance USDⓈ-M REST market data is unavailable")
+    try:
+        rest_age = now - float(rest_checked_at or 0)
+    except (TypeError, ValueError):
+        rest_age = float("inf")
+    if rest_age < 0 or rest_age > rest_max_age:
+        failures.append("REST market-data check is older than 15 minutes")
+
+    feeds = (
+        ("market", "Mark Price WebSocket"),
+        ("public", "Bid/Ask WebSocket"),
+    )
+    for prefix, label in feeds:
+        if not bool(ws_state.get(f"{prefix}_connected", False)):
+            failures.append(f"{label} is disconnected")
+            continue
+        try:
+            age = now - float(ws_state.get(f"{prefix}_last_message", 0) or 0)
+        except (TypeError, ValueError):
+            age = float("inf")
+        if age < 0 or age > websocket_max_age:
+            failures.append(f"{label} is stale")
+
+    return failures
