@@ -1,0 +1,84 @@
+MIRAGE v1.1 — GITHUB OVERLAY INSTALL
+====================================
+
+IMPORTANT: This is an OVERLAY ZIP for the existing mirage-pwa repository,
+not a standalone replacement of the entire repository. Keep the existing:
+  app.py, market.py, trading.py, news.py, requirements.txt, static/ and data/.
+
+1. Open the existing GitHub repository and select the main branch.
+2. Upload the CONTENTS of this ZIP to the repository root, preserving folders.
+3. Allow GitHub to replace these existing files:
+     Dockerfile
+     Procfile
+     .env.example
+   and add these new files:
+     app_v11.py
+     mirage_v11_fixes.py
+     tests/test_v11_fixes.py
+4. Commit the upload to main. Do not delete the old app.py or other project files.
+5. If the hosting dashboard has a manually overridden Start Command, change it to:
+   uvicorn app_v11:app --host 0.0.0.0 --port $PORT --workers 1
+   (For Docker deployments, the updated Dockerfile CMD is the entry point.)
+6. In the hosting service, keep the existing DATABASE_URL, APP_SECRET,
+   BOOTSTRAP_USERS_JSON, APP_ENV, and region labels. Do not overwrite actual
+   production secrets with .env.example values.
+7. Add these two environment variables if they are not already present:
+   BINANCE_FUTURES_MARKET_WS_URL=
+   wss://fstream.binance.com/market/stream?streams=!markPrice@arr@1s/!ticker@arr
+   BINANCE_FUTURES_PUBLIC_WS_URL=
+   wss://fstream.binance.com/public/stream?streams=!bookTicker
+8. Keep exactly ONE server worker. The background scanner and position manager
+   run in-process; multiple workers would create duplicate engines.
+9. Deploy. Check GET /api/health (while logged in is not required) and verify:
+   version = 1.1.0
+   websocket_feeds.market.connected = true
+   websocket_feeds.public.connected = true
+   market.ok = true before enabling new paper entries.
+10. Log in and open PHANTOM. Its state should be ACTIVE only while both separate
+   feeds are live and every open-position quote is complete and fresh.
+11. Keep Auto Paper Trading OFF until the market data region is confirmed and
+    the feed checks stay healthy. Test only in Paper Trading.
+
+WHAT THIS OVERLAY CHANGES
+-------------------------
+- Runs the app through app_v11.py while leaving the original application modules
+  and UI files in place.
+- Splits Binance USDⓈ-M streams: Mark Price / 24h ticker via /market/stream;
+  all best bid/ask updates via /public/stream.
+- Does not publish a tradable quote until bid, ask and mark exist and their two
+  independent receive timestamps are fresh. Missing/stale feeds fail closed.
+- Converts legacy v1.0 Funding checkpoints stored in seconds to milliseconds;
+  sends startTime/endTime in milliseconds; paginates history up to 20 x 1,000
+  records; and does not advance the Funding checkpoint on API/data errors.
+- Serializes position opening and rejects duplicate same-symbol/same-side open
+  positions for one account.
+- Adds an IP-based limit of 10 FAILED login attempts per 15 minutes.
+- Makes dashboard quote reads defensive and makes PHANTOM evaluate both feeds
+  independently plus the freshness of open-position quotes.
+- Adds isolated unit tests for these safety helpers.
+
+LIMITATIONS / IMPORTANT
+-----------------------
+- This does not turn Paper Trading into exchange execution and does not send
+  real orders. It also does not guarantee stop execution while the server or
+  market feed is unavailable.
+- Funding catch-up uses the persisted remaining paper quantity for returned
+  historical funding records. If a paper position was partially reduced very
+  close to a funding timestamp while the server was unavailable, v1.0 does not
+  retain enough per-fill history to reconstruct the exact quantity at that
+  historical timestamp. That edge case is reported in the audit, not hidden.
+- RU/EN translation coverage in the existing static/app.js remains incomplete;
+  this overlay does not replace the approved UI design. Analytics Profit Factor
+  edge-case display and the non-data-driven home chart also remain v1.0 items.
+- Schema migrations and full multi-process coordination are not introduced.
+- The hosting region's actual access to Binance REST and both WebSocket paths
+  must be tested after deployment. A green test run here cannot establish that
+  Binance will allow traffic from the chosen hosting region.
+
+LOCAL TESTS
+-----------
+From the repository root, run:
+  python -m pytest -q
+
+The existing trading helper tests and the new v1.1 helper tests should run.
+The new tests do not simulate Binance's live network or a deployed server.
