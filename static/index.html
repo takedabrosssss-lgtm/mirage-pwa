@@ -4,56 +4,63 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#050505">
-  <meta name="description" content="MIRAGE — trading intelligence and futures paper trading">
+  <meta name="description" content="MIRAGE — private futures trading intelligence">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=12">
   <title>MIRAGE</title>
 </head>
 <body>
   <div id="login-screen" class="login-screen">
+    <div class="login-atmosphere"></div>
     <div class="login-brand">
-      <svg class="logo-mark large" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 7 83 26 83 60 64 72 64 43 50 51 36 43 36 72 17 60 17 26 50 7Z"/><path d="M50 7 50 24 72 37M50 24 28 37M50 51 50 91"/></svg>
+      <svg class="logo-mark logo-large" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 7 83 26 83 60 64 72 64 43 50 51 36 43 36 72 17 60 17 26 50 7Z"/><path d="M50 7 50 24 72 37M50 24 28 37M50 51 50 91"/></svg>
       <span>M I R A G E</span>
     </div>
     <div class="login-card">
-      <p class="eyebrow">TRADING INTELLIGENCE</p>
+      <div class="eyebrow">PRIVATE FUTURES INTELLIGENCE</div>
       <h1 id="login-title">Добро пожаловать</h1>
-      <p class="muted" id="login-subtitle">Войдите в свой аккаунт MIRAGE</p>
-      <form id="login-form">
+      <p id="login-subtitle" class="muted">Войдите в свой аккаунт MIRAGE</p>
+      <form id="login-form" autocomplete="on">
         <label for="login-user">Логин</label>
-        <input id="login-user" name="username" autocomplete="username" required placeholder="Ваш логин">
+        <div class="login-input-wrap"><span class="field-icon" data-icon="user"></span><input id="login-user" name="username" autocomplete="username" required placeholder="Ваш логин"></div>
         <label for="login-pass">Пароль</label>
-        <input id="login-pass" name="password" type="password" autocomplete="current-password" required placeholder="Ваш пароль">
-        <button class="btn primary full" type="submit" id="login-button">Войти <span>→</span></button>
+        <div class="login-input-wrap"><span class="field-icon" data-icon="lock"></span><input id="login-pass" name="password" type="password" autocomplete="current-password" required placeholder="Ваш пароль"></div>
+        <button class="btn primary full" type="submit" id="login-button"><span>Войти в MIRAGE</span><span data-icon="arrow-right"></span></button>
         <div id="login-error" class="form-error" role="alert"></div>
       </form>
+      <div class="login-security"><span class="live-dot"></span> PRIVATE ACCESS <span class="security-sep"></span> PAPER ONLY</div>
     </div>
-    <div class="login-foot">PAPER TRADING · PRIVATE ACCESS</div>
+    <div class="login-foot">MARKET INTELLIGENCE · RISK CONTROL · PAPER EXECUTION</div>
   </div>
 
   <div id="app-shell" class="app-shell hidden">
     <header class="topbar">
       <div class="brand-lockup">
         <svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 7 83 26 83 60 64 72 64 43 50 51 36 43 36 72 17 60 17 26 50 7Z"/><path d="M50 7 50 24 72 37M50 24 28 37M50 51 50 91"/></svg>
-        <span>M I R A G E</span>
+        <div class="brand-wordmark"><span>MIRAGE</span><small>FUTURES INTELLIGENCE</small></div>
       </div>
-      <div class="top-actions"><span class="paper-badge">PAPER</span><button class="icon-btn" id="profile-btn" aria-label="Profile"><span id="profile-initial">U</span></button></div>
+      <div class="top-actions">
+        <button id="mode-toggle" class="mode-switch" type="button" aria-label="Switch interface mode"><span class="mode-indicator"></span><span id="mode-label">STEALTH MODE</span><span class="mode-caret" data-icon="chevrons-up-down"></span></button>
+        <button class="icon-btn profile-btn" id="profile-btn" aria-label="Open account settings"><span id="profile-initial">U</span></button>
+      </div>
     </header>
 
-    <main id="page-content" class="page-content" aria-live="polite"></main>
+    <main id="page-content" class="page-content" aria-live="polite">
+      <div class="loading-screen"><span class="loader-orbit"></span><span>Инициализация MIRAGE</span></div>
+    </main>
 
-    <nav class="bottom-nav" aria-label="Main navigation">
-      <button class="nav-item active" data-page="home"><span class="nav-icon">⌂</span><small data-i18n="home">Главная</small></button>
-      <button class="nav-item" data-page="scanner"><span class="nav-icon">◎</span><small data-i18n="scanner">Сканер</small></button>
-      <button class="nav-item" data-page="analytics"><span class="nav-icon">◴</span><small data-i18n="analytics">Аналитика</small></button>
-      <button class="nav-item" data-page="trading"><span class="nav-icon">ϟ</span><small data-i18n="trading">Торговля</small></button>
-      <button class="nav-item" data-page="more"><span class="nav-icon">•••</span><small data-i18n="more">Ещё</small></button>
+    <nav class="bottom-nav" aria-label="Главная навигация">
+      <button class="nav-item active" data-page="home" type="button"><span class="nav-icon" data-icon="home"></span><small>Главная</small></button>
+      <button class="nav-item" data-page="scanner" type="button"><span class="nav-icon" data-icon="scan-line"></span><small>Сканер</small></button>
+      <button class="nav-item" data-page="analytics" type="button"><span class="nav-icon" data-icon="chart-no-axes-combined"></span><small>Аналитика</small></button>
+      <button class="nav-item" data-page="trading" type="button"><span class="nav-icon" data-icon="arrow-left-right"></span><small>Торговля</small></button>
+      <button class="nav-item" data-page="more" type="button"><span class="nav-icon" data-icon="layers-3"></span><small>Ещё</small></button>
     </nav>
   </div>
 
   <div id="modal-root"></div>
   <div id="toast-root" class="toast-root" aria-live="polite"></div>
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v=12" defer></script>
 </body>
 </html>
