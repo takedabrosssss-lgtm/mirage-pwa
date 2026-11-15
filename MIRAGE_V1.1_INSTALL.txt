@@ -1,84 +1,90 @@
-MIRAGE v1.1 — GITHUB OVERLAY INSTALL
-====================================
+MIRAGE v1.1.1 — ОБНОВЛЕНИЕ ДЛЯ СУЩЕСТВУЮЩЕГО РЕПОЗИТОРИЯ
+=========================================================
 
-IMPORTANT: This is an OVERLAY ZIP for the existing mirage-pwa repository,
-not a standalone replacement of the entire repository. Keep the existing:
-  app.py, market.py, trading.py, news.py, requirements.txt, static/ and data/.
+Это OVERLAY-архив. Он не заменяет весь проект. Загружайте содержимое архива
+в корень уже существующего репозитория mirage-pwa, сохраняя папки.
 
-1. Open the existing GitHub repository and select the main branch.
-2. Upload the CONTENTS of this ZIP to the repository root, preserving folders.
-3. Allow GitHub to replace these existing files:
-     Dockerfile
-     Procfile
-     .env.example
-   and add these new files:
-     app_v11.py
-     mirage_v11_fixes.py
-     tests/test_v11_fixes.py
-4. Commit the upload to main. Do not delete the old app.py or other project files.
-5. If the hosting dashboard has a manually overridden Start Command, change it to:
-   uvicorn app_v11:app --host 0.0.0.0 --port $PORT --workers 1
-   (For Docker deployments, the updated Dockerfile CMD is the entry point.)
-6. In the hosting service, keep the existing DATABASE_URL, APP_SECRET,
-   BOOTSTRAP_USERS_JSON, APP_ENV, and region labels. Do not overwrite actual
-   production secrets with .env.example values.
-7. Add these two environment variables if they are not already present:
-   BINANCE_FUTURES_MARKET_WS_URL=
-   wss://fstream.binance.com/market/stream?streams=!markPrice@arr@1s/!ticker@arr
-   BINANCE_FUTURES_PUBLIC_WS_URL=
-   wss://fstream.binance.com/public/stream?streams=!bookTicker
-8. Keep exactly ONE server worker. The background scanner and position manager
-   run in-process; multiple workers would create duplicate engines.
-9. Deploy. Check GET /api/health (while logged in is not required) and verify:
-   version = 1.1.0
-   websocket_feeds.market.connected = true
-   websocket_feeds.public.connected = true
-   market.ok = true before enabling new paper entries.
-10. Log in and open PHANTOM. Its state should be ACTIVE only while both separate
-   feeds are live and every open-position quote is complete and fresh.
-11. Keep Auto Paper Trading OFF until the market data region is confirmed and
-    the feed checks stay healthy. Test only in Paper Trading.
+ЧТО БУДЕТ ЗАМЕНЕНО
+------------------
+- MIRAGE_V1.1_INSTALL.txt (эта инструкция обновляется)
+- Procfile
+- Dockerfile
+- mirage_v11_fixes.py
+- tests/test_v11_fixes.py
 
-WHAT THIS OVERLAY CHANGES
--------------------------
-- Runs the app through app_v11.py while leaving the original application modules
-  and UI files in place.
-- Splits Binance USDⓈ-M streams: Mark Price / 24h ticker via /market/stream;
-  all best bid/ask updates via /public/stream.
-- Does not publish a tradable quote until bid, ask and mark exist and their two
-  independent receive timestamps are fresh. Missing/stale feeds fail closed.
-- Converts legacy v1.0 Funding checkpoints stored in seconds to milliseconds;
-  sends startTime/endTime in milliseconds; paginates history up to 20 x 1,000
-  records; and does not advance the Funding checkpoint on API/data errors.
-- Serializes position opening and rejects duplicate same-symbol/same-side open
-  positions for one account.
-- Adds an IP-based limit of 10 FAILED login attempts per 15 minutes.
-- Makes dashboard quote reads defensive and makes PHANTOM evaluate both feeds
-  independently plus the freshness of open-position quotes.
-- Adds isolated unit tests for these safety helpers.
+ЧТО БУДЕТ ДОБАВЛЕНО
+-------------------
+- app_v111.py
+- .github/workflows/tests.yml
 
-LIMITATIONS / IMPORTANT
+НЕ УДАЛЯТЬ И НЕ ЗАМЕНЯТЬ
 -----------------------
-- This does not turn Paper Trading into exchange execution and does not send
-  real orders. It also does not guarantee stop execution while the server or
-  market feed is unavailable.
-- Funding catch-up uses the persisted remaining paper quantity for returned
-  historical funding records. If a paper position was partially reduced very
-  close to a funding timestamp while the server was unavailable, v1.0 does not
-  retain enough per-fill history to reconstruct the exact quantity at that
-  historical timestamp. That edge case is reported in the audit, not hidden.
-- RU/EN translation coverage in the existing static/app.js remains incomplete;
-  this overlay does not replace the approved UI design. Analytics Profit Factor
-  edge-case display and the non-data-driven home chart also remain v1.0 items.
-- Schema migrations and full multi-process coordination are not introduced.
-- The hosting region's actual access to Binance REST and both WebSocket paths
-  must be tested after deployment. A green test run here cannot establish that
-  Binance will allow traffic from the chosen hosting region.
+Оставьте без изменений app.py, app_v11.py, market.py, trading.py, news.py,
+requirements.txt, static/, data/ и остальные существующие файлы.
 
-LOCAL TESTS
------------
-From the repository root, run:
-  python -m pytest -q
+КАК ЗАГРУЗИТЬ
+-------------
+1. Откройте GitHub → takedabrosssss-lgtm/mirage-pwa → ветка main.
+2. Нажмите Add file → Upload files.
+3. Распакуйте ZIP на телефоне или компьютере.
+4. Загрузите ИМЕННО СОДЕРЖИМОЕ распакованной папки, а не сам ZIP.
+5. Сохраните структуру папок: .github/workflows/ и tests/ должны остаться
+   папками с указанными файлами внутри.
+6. Разрешите GitHub заменить 5 файлов из списка выше и добавить 2 новых.
+7. Нажмите Commit changes в ветку main.
 
-The existing trading helper tests and the new v1.1 helper tests should run.
-The new tests do not simulate Binance's live network or a deployed server.
+НАСТРОЙКА ХОСТИНГА
+------------------
+Procfile и Dockerfile теперь запускают app_v111:app. Если в настройках хостинга
+задана собственная Start Command, замените её на:
+
+uvicorn app_v111:app --host 0.0.0.0 --port $PORT --workers 1
+
+Оставьте ровно один worker. Существующие переменные окружения и секреты
+(DATABASE_URL, APP_SECRET, BOOTSTRAP_USERS_JSON, APP_ENV, регион) не удаляйте
+и не перезаписывайте. Не вставляйте значения из .env.example вместо секретов.
+
+ЧТО ИМЕННО ИСПРАВЛЕНО
+---------------------
+1. PHANTOM теперь является реальным запретом новых входов, а не только
+   индикатором состояния. Проверка выполняется непосредственно перед
+   открытием позиции, поэтому действует и для Auto Paper Trading, и для
+   ручного открытия через API.
+2. Новая сделка разрешается только при ACTIVE-состоянии PHANTOM, доступном и
+   недавно проверенном Binance USDⓈ-M REST, а также при двух подключённых и
+   свежих WebSocket-потоках: Mark Price и Bid/Ask.
+3. REST fallback не считается достаточным основанием для нового входа.
+   Он может продолжать помогать менеджеру обслуживать уже открытые позиции.
+   Потеря WebSocket сама по себе не закрывает позицию и не меняет SL/TP.
+4. Риск-расчёты, комиссии, Funding-обработка, логика стопов/тейк-профитов и
+   существующие модули v1.1 не переписываются: app_v111 оборачивает
+   существующий open_trade и проверяет PHANTOM до вызова торговой логики.
+5. В /api/phantom появляется явная проверка New paper entries и поле
+   new_entries_allowed. /api/health сообщает версию 1.1.1 и статус входного
+   feed-gate.
+6. Добавлены unit-тесты для защитного шлюза и GitHub Actions: тесты будут
+   запускаться автоматически при push в main и при Pull Request.
+
+ПРОВЕРКА ПОСЛЕ ЗАГРУЗКИ
+-----------------------
+1. Дождитесь завершения Deploy на хостинге.
+2. Откройте /api/health: версия должна быть 1.1.1.
+3. В /api/phantom проверьте поле state и пункт New paper entries.
+4. Если любой из двух WebSocket-потоков отключён или устарел, PHANTOM должен
+   быть PROTECTIVE, new_entries_allowed=false, а попытка открыть новую сделку
+   должна быть отклонена.
+5. В GitHub откройте Actions и проверьте workflow MIRAGE tests.
+6. Не включайте Auto Paper Trading до подтверждения здоровых потоков и
+   успешной проверки работы хостинга.
+
+ВАЖНЫЕ ОГРАНИЧЕНИЯ
+------------------
+- Это Paper Trading. Архив не добавляет отправку реальных ордеров.
+- Защитный шлюз блокирует новые позиции, но не может гарантировать исполнение
+  SL/TP при полном отключении сервера или недоступности рыночных данных.
+- Unit-тесты проверяют правила на тестовых данных, а не реальный доступ Binance
+  из региона хостинга. REST и оба WebSocket endpoint всё равно нужно проверить
+  после развертывания.
+- Исторический Funding при длительном простое сервера не всегда может точно
+  восстановить размер частично закрытой позиции на каждый прошлый момент
+  начисления; это ограничение исторических данных текущей модели сделок.
