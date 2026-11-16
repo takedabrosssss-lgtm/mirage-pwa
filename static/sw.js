@@ -1,5 +1,5 @@
-const CACHE = 'mirage-shell-v14';
-const SHELL = ['/', '/static/styles.css?v=14', '/static/app.js?v=14', '/static/icon.svg', '/manifest.webmanifest'];
+const CACHE = 'mirage-shell-v15';
+const SHELL = ['/', '/static/styles.css?v=15', '/static/app.js?v=15', '/static/icon.svg', '/manifest.webmanifest'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
   self.skipWaiting();

@@ -29,7 +29,8 @@ const ICONS = {
   'arrow-up-right':'<path d="M7 17 17 7"/><path d="M7 7h10v10"/>',
   'arrow-down-right':'<path d="M7 7 17 17"/><path d="M7 17h10V7"/>',
   search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
-  settings:'<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.6a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.6-1.4-2.4 1.4-1.1a7 7 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.6a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.6 1.4 2.4-1.4 1.1a7 7 0 0 1 0 1.8Z"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94l-.36-2.54A.48.48 0 0 0 13.88 2h-3.76a.48.48 0 0 0-.49.41L9.27 4.95c-.59.24-1.13.55-1.63.94l-2.39-.96a.49.49 0 0 0-.6.22L2.73 8.47a.5.5 0 0 0 .12.64l2.02 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.02 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.12.2.36.29.6.22l2.39-.96c.5.39 1.04.7 1.63.94l.36 2.54c.05.24.25.41.49.41h3.76c.24 0 .44-.17.49-.41l.36-2.54c.59-.24 1.13-.55 1.63-.94l2.39.96c.24.08.48-.02.6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.01-1.58z"/>',
+  'log-out':'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>' ,
   newspaper:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M7 8h5M7 12h10M7 16h10M16 8h1"/>',
   'brain-circuit':'<path d="M12 18V5a3 3 0 0 0-6 0 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 3Z"/><path d="M12 18V5a3 3 0 0 1 6 0 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 3Z"/><path d="M8 8h.01M8 13h.01M16 8h.01M16 13h.01"/>',
   'chevron-right':'<path d="m9 18 6-6-6-6"/>',
@@ -60,10 +61,69 @@ async function api(path,options={}){
   let data={};try{data=await res.json()}catch{}
   if(!res.ok){if(res.status===401){showLogin();throw new Error('Сессия завершена. Войдите снова.')}throw new Error(data.detail||`HTTP ${res.status}`)}return data;
 }
-function showLogin(){state.user=null;stopPolling();$('#app-shell').classList.add('hidden');$('#login-screen').classList.remove('hidden')}
+function showLogin(){
+  state.user=null;stopPolling();
+  $('#app-shell').classList.add('hidden');
+  $('#onboarding-screen')?.classList.add('hidden');
+  $('#login-screen').classList.remove('hidden');
+  $('#login-pass').value='';
+  $('#login-error').textContent='';
+}
 function showApp(){ $('#login-screen').classList.add('hidden');$('#app-shell').classList.remove('hidden');$('#profile-initial').textContent=(state.user.username||'U').slice(0,1).toUpperCase();applyMode(); }
-function applyMode(){document.body.dataset.mode=state.mode;document.documentElement.dataset.mode=state.mode;document.body.classList.toggle('reduce-motion',!!state.settings.reduced_motion);$('#mode-label').textContent=state.mode==='STEALTH'?'STEALTH MODE':'SPECTRE MODE';$('.mode-indicator')?.classList.toggle('expert',state.mode==='SPECTRE')}
-function setMode(){state.mode=state.mode==='STEALTH'?'SPECTRE':'STEALTH';localStorage.setItem('mirage-mode',state.mode);document.body.classList.add('mode-transition');applyMode();setTimeout(()=>document.body.classList.remove('mode-transition'),520);toast(state.mode==='STEALTH'?'STEALTH MODE активирован':'SPECTRE MODE активирован')}
+function updateModeOptions(){
+  $$('[data-mode]').forEach(button=>{
+    const selected=button.dataset.mode===state.mode;
+    button.classList.toggle('selected',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
+}
+function applyMode(){
+  document.body.dataset.mode=state.mode;
+  document.documentElement.dataset.mode=state.mode;
+  document.body.classList.toggle('reduce-motion',!!state.settings.reduced_motion);
+  $('#mode-label').textContent=state.mode==='STEALTH'?'STEALTH MODE':'SPECTRE MODE';
+  $('.mode-indicator')?.classList.toggle('expert',state.mode==='SPECTRE');
+  updateModeOptions();
+}
+const MODE_TRANSITION_MS=2400;
+const wait=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
+async function setMode(nextMode=state.mode==='STEALTH'?'SPECTRE':'STEALTH'){
+  if(state.modeSwitching||!['STEALTH','SPECTRE'].includes(nextMode)||nextMode===state.mode)return;
+  state.modeSwitching=true;
+  const overlay=$('#mode-transition');
+  if(!overlay){state.mode=nextMode;localStorage.setItem('mirage-mode',state.mode);applyMode();state.modeSwitching=false;return;}
+  overlay.dataset.target=nextMode;
+  $('#mode-transition-name').textContent=nextMode==='STEALTH'?'STEALTH MODE':'SPECTRE MODE';
+  overlay.classList.remove('is-active');
+  void overlay.offsetWidth;
+  overlay.classList.add('is-active');
+  $('#mode-toggle').disabled=true;
+  // Change the visual theme under the veil halfway through the 2.4-second sequence.
+  await wait(Math.round(MODE_TRANSITION_MS/2));
+  state.mode=nextMode;
+  localStorage.setItem('mirage-mode',state.mode);
+  applyMode();
+  await wait(MODE_TRANSITION_MS-Math.round(MODE_TRANSITION_MS/2));
+  overlay.classList.remove('is-active');
+  overlay.removeAttribute('data-target');
+  $('#mode-toggle').disabled=false;
+  state.modeSwitching=false;
+  toast(state.mode==='STEALTH'?'STEALTH MODE активирован':'SPECTRE MODE активирован');
+}
+async function performLogout(button){
+  if(button?.disabled)return;
+  const previous=button?.innerHTML;
+  if(button){button.disabled=true;button.innerHTML=`${icon('refresh-cw')} Завершение сеанса…`;}
+  try{
+    const result=await api('/api/auth/logout',{method:'POST'});
+    if(!result?.ok)throw new Error('Сервер не подтвердил завершение сеанса');
+    showLogin();
+    toast('Вы вышли из аккаунта MIRAGE');
+  }catch(error){
+    if(button){button.disabled=false;button.innerHTML=previous;}
+    toast(`Не удалось выйти: ${error.message}`,'error');
+  }
+}
 async function refreshBasics(){const [dash,marketData]=await Promise.all([api('/api/dashboard'),api('/api/market/overview')]);state.dashboard=dash;state.market=marketData;state.settings=state.settings||{};return [dash,marketData]}
 function marketHealthy(){return !!state.market.market?.ok}
 function scannerState(){return state.dashboard?.engine?.scanner||'BOOTING'}
@@ -222,7 +282,7 @@ async function renderSettings(root){await refreshBasics();const s=state.settings
   <section class="panel settings-section"><div class="eyebrow">INTERFACE</div><h2>Вид интерфейса</h2><div class="mode-choice"><button class="mode-option ${state.mode==='STEALTH'?'selected':''}" data-mode="STEALTH"><span>${icon('eye')}</span><strong>STEALTH MODE</strong><small>Минималистичный вид</small></button><button class="mode-option ${state.mode==='SPECTRE'?'selected':''}" data-mode="SPECTRE"><span>${icon('brain-circuit')}</span><strong>SPECTRE MODE</strong><small>Расширенные данные</small></button></div><p class="form-note">Режим меняет только визуальное отображение. Все расчёты, фильтры и функции продолжают работать.</p></section>
   <section class="panel settings-section"><div class="eyebrow">EXPERIENCE</div><h2>Предпочтения</h2><label class="language-setting"><span>Формат чисел</span><select id="setting-language"><option value="ru" ${s.language==='ru'?'selected':''}>Русский</option><option value="en" ${s.language==='en'?'selected':''}>English</option></select></label><div class="settings-toggle-row"><div><strong>Уведомления</strong><p>Важные события, входы и блокировки PHANTOM.</p></div><label class="toggle"><input id="setting-notify" type="checkbox" ${s.notifications?'checked':''}><span></span></label></div><div class="settings-toggle-row"><div><strong>Уменьшить анимации</strong><p>Отключить часть переходов интерфейса.</p></div><label class="toggle"><input id="setting-motion" type="checkbox" ${s.reduced_motion?'checked':''}><span></span></label></div></section>
   <section class="panel settings-section"><div class="eyebrow">MARKET CONNECTION</div><h2>Подключение данных</h2><div class="connection-row"><span>Binance USDⓈ-M REST</span><b class="${marketHealthy()?'good':'warn'}">${marketHealthy()?'CONNECTED':'CHECK'}</b></div><div class="connection-row"><span>Mark Price WebSocket</span><b class="${state.dashboard?.engine?.websocket?.market_connected?'good':'warn'}">${state.dashboard?.engine?.websocket?.market_connected?'CONNECTED':'OFFLINE'}</b></div><div class="connection-row"><span>Bid / Ask WebSocket</span><b class="${state.dashboard?.engine?.websocket?.public_connected?'good':'warn'}">${state.dashboard?.engine?.websocket?.public_connected?'CONNECTED':'OFFLINE'}</b></div><div class="connection-row"><span>Source</span><b class="connection-source">${esc(s.language||'ru').toUpperCase()} · ${esc(state.market.market?.region||'')}</b></div></section>
-  <button class="btn logout-btn" id="logout-button">${icon('external-link')} Выйти из аккаунта</button><div class="settings-version">MIRAGE v1.4 · USDⓈ-M FUTURES · PAPER ONLY</div>`;
+  <button class="btn logout-btn" id="logout-button" type="button">${icon('log-out')} Выйти из аккаунта</button><div class="settings-version">MIRAGE v1.4.1 · USDⓈ-M FUTURES · PAPER ONLY</div>`;
 }
 function renderMore(root){root.innerHTML=`<div class="page-intro"><div><div class="eyebrow">MIRAGE SUITE</div><h1>Ещё</h1><p>Инструменты мониторинга и управления системой.</p></div><span class="paper-chip">${icon('layers-3')} MODULES</span></div><div class="more-grid-v2"><button class="more-card panel" data-page="intelligence"><span>${icon('brain-circuit')}</span><strong>Интеллект</strong><small>Анализ отдельного контракта</small>${icon('chevron-right','more-arrow')}</button><button class="more-card panel" data-page="news"><span>${icon('newspaper')}</span><strong>Новости</strong><small>Информационный контекст рынка</small>${icon('chevron-right','more-arrow')}</button><button class="more-card panel" data-page="phantom"><span>${icon('shield')}</span><strong>PHANTOM</strong><small>Защита и журнал событий</small>${icon('chevron-right','more-arrow')}</button><button class="more-card panel" data-page="settings"><span>${icon('settings')}</span><strong>Настройки</strong><small>Риск, автоматизация и вид</small>${icon('chevron-right','more-arrow')}</button><button class="more-card panel" data-page="analytics"><span>${icon('chart-no-axes-combined')}</span><strong>Аналитика</strong><small>Статистика виртуального счёта</small>${icon('chevron-right','more-arrow')}</button><button class="more-card panel" data-page="trading"><span>${icon('arrow-left-right')}</span><strong>Позиции</strong><small>Сделки, уровни, комиссии</small>${icon('chevron-right','more-arrow')}</button></div><section class="panel about-panel"><div class="about-mark"><svg class="logo-mark" viewBox="0 0 100 100"><path d="M50 7 83 26 83 60 64 72 64 43 50 51 36 43 36 72 17 60 17 26 50 7Z"/><path d="M50 7 50 24 72 37M50 24 28 37M50 51 50 91"/></svg></div><div><strong>MIRAGE</strong><p>Private trading intelligence. Futures paper execution. No real exchange orders.</p></div></section>`}
 
@@ -235,22 +295,53 @@ async function openPaperTrade(data){
 }
 async function patchSettings(patch){try{state.settings=await api('/api/settings',{method:'PATCH',body:JSON.stringify(patch)});toast('Настройки сохранены');return true}catch(e){toast(e.message,'error');return false}}
 
-// Global event delegation keeps controls functional across animated page swaps.
+// Explicit, allow-listed navigation prevents unrelated controls from falling through to Settings.
+const APP_PAGES=new Set(['home','scanner','analytics','trading','more','news','intelligence','phantom','settings']);
 document.addEventListener('click',async e=>{
-  const nav=e.target.closest('[data-page]');if(nav){navTo(nav.dataset.page);return}
-  const filter=e.target.closest('[data-filter]');if(filter){state.marketFilter=filter.dataset.filter;await navigate('home');return}
-  const tab=e.target.closest('[data-trade-status]');if(tab){state.tradeStatus=tab.dataset.tradeStatus;await navigate('trading');return}
-  const mode=e.target.closest('[data-mode]');if(mode){state.mode=mode.dataset.mode;localStorage.setItem('mirage-mode',state.mode);applyMode();await navigate('settings');return}
-  const action=e.target.closest('[data-action]');if(action){const a=action.dataset.action;
-    if(a==='open-signal'||a==='open-analysis')await openPaperTrade(action.dataset);
-    if(a==='close-trade'){if(!confirm('Закрыть Paper-позицию по текущим рыночным Bid/Ask?'))return;try{await api(`/api/trades/${action.dataset.id}/close`,{method:'POST'});toast('Paper-позиция закрыта');await navigate('trading')}catch(err){toast(err.message,'error')}}
-    if(a==='retry')await navigate(state.page);
+  const logoutButton=e.target.closest('#logout-button');
+  if(logoutButton){e.preventDefault();await performLogout(logoutButton);return;}
+
+  const modeToggle=e.target.closest('#mode-toggle');
+  if(modeToggle){e.preventDefault();await setMode();return;}
+
+  const modeOption=e.target.closest('button[data-mode]');
+  if(modeOption){e.preventDefault();await setMode(modeOption.dataset.mode);return;}
+
+  const nav=e.target.closest('button[data-page]');
+  if(nav){
+    e.preventDefault();
+    const page=nav.dataset.page;
+    if(APP_PAGES.has(page))navTo(page);
+    return;
   }
-  if(e.target.closest('#mode-toggle'))setMode();
-  if(e.target.closest('#manual-scan')){const button=e.target.closest('#manual-scan');button.disabled=true;button.innerHTML=`${icon('refresh-cw')} Проверка…`;try{const result=await api('/api/scanner/run',{method:'POST'});toast(`Сканирование завершено: ${result.candidates} кандидатов · ${result.signals_saved} новых сигналов`);await navigate('scanner')}catch(err){button.disabled=false;button.innerHTML=`${icon('refresh-cw')} Проверить сейчас`;toast(err.message,'error')}}
-  if(e.target.closest('#profile-btn'))navTo('settings');
-  if(e.target.closest('#analyze-button'))runAnalysis();
-  if(e.target.closest('#logout-button')){try{await api('/api/auth/logout',{method:'POST'})}catch{}showLogin()}
+
+  const filter=e.target.closest('[data-filter]');
+  if(filter){state.marketFilter=filter.dataset.filter;await navigate('home');return;}
+  const tab=e.target.closest('[data-trade-status]');
+  if(tab){state.tradeStatus=tab.dataset.tradeStatus;await navigate('trading');return;}
+
+  const action=e.target.closest('[data-action]');
+  if(action){
+    const a=action.dataset.action;
+    if(a==='open-signal'||a==='open-analysis'){await openPaperTrade(action.dataset);return;}
+    if(a==='close-trade'){
+      if(!confirm('Закрыть Paper-позицию по текущим рыночным Bid/Ask?'))return;
+      try{await api(`/api/trades/${action.dataset.id}/close`,{method:'POST'});toast('Paper-позиция закрыта');await navigate('trading');}
+      catch(err){toast(err.message,'error');}
+      return;
+    }
+    if(a==='retry'){await navigate(state.page);return;}
+  }
+
+  const scanButton=e.target.closest('#manual-scan');
+  if(scanButton){
+    if(scanButton.disabled)return;
+    scanButton.disabled=true;scanButton.innerHTML=`${icon('refresh-cw')} Проверка…`;
+    try{const result=await api('/api/scanner/run',{method:'POST'});toast(`Сканирование завершено: ${result.candidates} кандидатов · ${result.signals_saved} новых сигналов`);await navigate('scanner');}
+    catch(err){scanButton.disabled=false;scanButton.innerHTML=`${icon('refresh-cw')} Проверить сейчас`;toast(err.message,'error');}
+    return;
+  }
+  if(e.target.closest('#analyze-button')){runAnalysis();return;}
 });
 
 document.addEventListener('input',e=>{
