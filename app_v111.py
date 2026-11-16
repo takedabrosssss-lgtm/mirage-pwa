@@ -1,4 +1,4 @@
-"""MIRAGE v1.1.1 entry-safety overlay with v1.2.1 DB fix."""
+"""MIRAGE v1.1.1 entry-safety overlay with v1.3 protections."""
 from __future__ import annotations
 
 import time
@@ -74,7 +74,7 @@ def health_v111():
         float(core.market.status.checked_at or 0),
         now,
     )
-    result["version"] = "1.2.1"
+    result["version"] = "1.3.0"
     result["entry_feed_gate"] = {
         "allowed": not failures,
         "block_reasons": failures,
@@ -92,6 +92,9 @@ import mirage_db_fix_v12  # noqa: E402,F401
 
 # v1.2 strategy scanning and Binance REST retry hardening.
 import mirage_runtime_v12  # noqa: E402,F401
+
+# v1.3 fail-closed REST, scanner, and position-management protections.
+import mirage_safety_v13  # noqa: E402,F401
 
 
 if __name__ == "__main__":
