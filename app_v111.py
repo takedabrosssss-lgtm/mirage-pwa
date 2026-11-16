@@ -96,6 +96,9 @@ import mirage_runtime_v12  # noqa: E402,F401
 # v1.3 fail-closed REST, scanner, and position-management protections.
 import mirage_safety_v13  # noqa: E402,F401
 
+# v1.4 coordinated UI, analytics, and scan-only controls.
+import mirage_release_v14  # noqa: E402,F401
+
 
 if __name__ == "__main__":
     import os

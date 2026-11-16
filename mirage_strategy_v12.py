@@ -218,17 +218,49 @@ def analyze_strategy(candles: list[dict[str, float]], strategy: str) -> dict[str
     strength = score if direction == "BUY" else 100.0 - score
     grade = "S" if strength >= 90 else "A" if strength >= 80 else "B" if strength >= 70 else "C"
 
-    # Original Trading Intelligence PRO independent quality gate.
+    # Conservative multi-stage quality gate. These are rule checks, not a
+    # statistical probability of winning. Require DI separation, both EMA
+    # slopes, sufficient participation and avoid chasing an overextended bar.
     plus_di, minus_di = adx_data["plus_di"], adx_data["minus_di"]
-    di_ok = plus_di > minus_di if direction == "BUY" else minus_di > plus_di
-    ema_slope = indicators["ema20_previous"]
-    slope_ok = (e20 > ema_slope) if direction == "BUY" else (e20 < ema_slope)
-    minimum_volume = 1.2 if strategy == "breakout" else 0.75
+    directional_gap = abs(plus_di - minus_di)
+    di_ok = (plus_di > minus_di if direction == "BUY" else minus_di > plus_di) and directional_gap >= 5.0
+    ema20_previous = indicators["ema20_previous"]
+    ema50_previous = indicators["ema50_previous"]
+    if direction == "BUY":
+        slope_ok = bool(ema20_previous is not None and ema50_previous is not None
+                        and e20 > ema20_previous and e50 > ema50_previous)
+    else:
+        slope_ok = bool(ema20_previous is not None and ema50_previous is not None
+                        and e20 < ema20_previous and e50 < ema50_previous)
+    minimum_volume = 1.3 if strategy == "breakout" else 1.0
     volume_ok = volume_ratio is not None and volume_ratio >= minimum_volume
-    gate = {"passed": bool(di_ok and slope_ok and volume_ok),
-            "checks": {"directional_movement": bool(di_ok), "ema_slope": bool(slope_ok), "volume_participation": bool(volume_ok)},
-            "minimum_volume_ratio": minimum_volume,
-            "rejection_reasons": [label for ok, label in ((di_ok, "DI не подтверждает направление"), (slope_ok, "Наклон EMA20 не подтверждает направление"), (volume_ok, "Недостаточное участие объёма")) if not ok]}
+    minimum_adx = 21.0 if strategy == "trend_following" else 20.0
+    adx_ok = adx_value >= minimum_adx
+    extension_limit_atr = 1.8 if strategy in {"breakout", "trend_following"} else 1.0
+    extension_atr = abs(price - e20) / atr
+    extension_ok = extension_atr <= extension_limit_atr
+    bollinger = indicators.get("bollinger") or {}
+    volatility_ok = float(bollinger.get("width", 0) or 0) > 0.002
+    checks = {
+        "directional_movement": bool(di_ok), "ema_slopes": bool(slope_ok),
+        "volume_participation": bool(volume_ok), "trend_strength": bool(adx_ok),
+        "not_overextended": bool(extension_ok), "volatility_present": bool(volatility_ok),
+    }
+    labels = {
+        "directional_movement": "DI gap below 5 or wrong direction",
+        "ema_slopes": "EMA20/EMA50 slopes do not confirm direction",
+        "volume_participation": "Insufficient volume participation",
+        "trend_strength": f"ADX below {minimum_adx:g}",
+        "not_overextended": f"Price extended more than {extension_limit_atr:g} ATR from EMA20",
+        "volatility_present": "Volatility too compressed",
+    }
+    gate = {
+        "passed": all(checks.values()), "checks": checks,
+        "minimum_volume_ratio": minimum_volume, "minimum_adx": minimum_adx,
+        "directional_gap": round(directional_gap, 3),
+        "extension_atr": round(extension_atr, 3),
+        "rejection_reasons": [labels[key] for key, ok in checks.items() if not ok],
+    }
     indicators["quality_gate"] = gate
     indicators["bollinger"] = indicators.get("bollinger")
     if strength < 80 or grade not in {"S", "A"} or not gate["passed"]:
@@ -249,7 +281,8 @@ def analyze_strategy(candles: list[dict[str, float]], strategy: str) -> dict[str
         return None
     return {"direction": direction, "side": side, "score": int(round(strength)), "grade": grade,
             "entry": price, "stop": stop, "tps": tps, "reasons": reasons,
-            "indicators": indicators, "created_at": int(time.time())}
+            "indicators": indicators, "created_at": int(time.time()),
+            "candle_open_time": int(candles[-1]["timestamp"])}
 
 
 _EXCHANGE_CACHE: dict[str, Any] = {"loaded_at": 0.0, "allowed": set()}
@@ -326,6 +359,7 @@ async def scan_market(api, symbols_limit: int = 10, *, ticker_cache: dict[str, d
                     return {"symbol": sym, "side": result["side"], "strategy": strat, "interval": tf,
                             "score": result["score"], "grade": result["grade"], "entry": result["entry"],
                             "stop": result["stop"], "tps": result["tps"], "created_at": result["created_at"],
+                            "candle_open_time": result["candle_open_time"],
                             "indicators": result["indicators"], "reasons": result["reasons"]}
                 except Exception:
                     return None

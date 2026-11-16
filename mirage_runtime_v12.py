@@ -193,11 +193,19 @@ def open_trade_v12(db, user, plan, quote_data, settings):
 core.open_trade = open_trade_v12
 
 
-async def run_scan_v12() -> None:
-    """Original Telegram strategy model with futures-native paper execution."""
+async def run_scan_v12(*, execute_entries: bool = True) -> None:
+    """Scan the market; optionally execute qualified setups in Paper mode.
+
+    Manual scans are deliberately scan-only. Automatic entries never queue:
+    a signal seen while a user's position slots are full is marked against its
+    closed candle and cannot be executed later when a slot becomes free.
+    """
     if not core.market.status.ok:
         core.engine_state["scanner"] = "BLOCKED"
         core.engine_state["last_error"] = "Binance USD-M REST market-data check is unavailable"
+        core.engine_state["scan_candidates"] = 0
+        core.engine_state["signals_saved"] = 0
+        core.engine_state["auto_positions_opened"] = 0
         return
     try:
         candidates = await scan_market(
@@ -221,12 +229,14 @@ async def run_scan_v12() -> None:
                         core.Signal.created_at > now - cooldown,
                     ).order_by(core.desc(core.Signal.created_at)).limit(1)
                 )
-                # Cooldown deduplicates the signal feed, not the execution
-                # retry. If the signal was saved while a quote was stale, a
-                # later scan may still enter it when a fresh live quote arrives.
+                # Signal-feed deduplication is separate from execution safety.
+                # A still-fresh signal may retry after a transient stale quote,
+                # but capacity skips are persisted per closed candle below and
+                # cannot become delayed queued entries when a slot later frees.
                 if existing_signal is None:
                     indicators = dict(item.get("indicators") or {})
                     indicators["strategy_reasons"] = item.get("reasons", [])
+                    indicators["signal_candle_time"] = int(item.get("candle_open_time", 0) or 0)
                     signal = core.Signal(
                         symbol=item["symbol"], side=item["side"], strategy=item["strategy"],
                         interval=item["interval"], score=item["score"], grade=item["grade"],
@@ -237,12 +247,72 @@ async def run_scan_v12() -> None:
                     db.flush()
                     saved_total += 1
 
-                # The user's previous Telegram workflow was autonomous. Each
-                # MIRAGE login now gets its own independent automatic paper book.
+                # A manual scan refreshes signals only; it must not unexpectedly
+                # create a Paper position. Auto execution belongs to background cycles.
+                if not execute_entries:
+                    continue
+
+                # Each MIRAGE login has an independent Paper book. The guard is
+                # evaluated immediately before every automatic entry.
                 for user in users:
                     settings = core.get_settings(db, user.id)
                     if not settings.get("auto_trade", True) or item["strategy"] not in settings.get("strategies", []):
                         continue
+                    candle_id = int(item.get("candle_open_time", 0) or 0)
+                    signal_key = f"CAPACITY_SKIP|{item['symbol']}|{item['interval']}|{item['side']}|{item['strategy']}|{candle_id}"
+                    already_skipped = db.scalar(core.select(core.AuditEvent.id).where(
+                        core.AuditEvent.user_id == user.id,
+                        core.AuditEvent.category == "AUTO_ENTRY",
+                        core.AuditEvent.message == signal_key,
+                    ).limit(1))
+                    if already_skipped:
+                        continue
+
+                    open_positions = core.active_trades(db, user.id)
+                    if len(open_positions) >= int(settings.get("max_positions", 3)):
+                        core.add_audit(db, "AUTO_ENTRY", "WARNING", signal_key, user.id)
+                        continue
+
+                    # Capital protection: stop adding exposure after a 1.5% UTC-day
+                    # realized loss or three consecutive non-manual losing trades.
+                    utc_day_start = int(datetime.now(timezone.utc).replace(
+                        hour=0, minute=0, second=0, microsecond=0
+                    ).timestamp())
+                    daily_closed = db.scalars(core.select(core.Trade).where(
+                        core.Trade.user_id == user.id,
+                        core.Trade.status == "CLOSED",
+                        core.Trade.closed_at >= utc_day_start,
+                    )).all()
+                    daily_net = sum(
+                        t.gross_realized - t.entry_fee - t.exit_fee_total + t.funding_pnl
+                        for t in daily_closed if t.close_reason != "MANUAL"
+                    )
+                    guard_reason = None
+                    if daily_net <= -150.0:
+                        guard_reason = f"Daily realized loss limit reached ({daily_net:.2f} USDT; limit -150 USDT)"
+                    recent_closed = db.scalars(core.select(core.Trade).where(
+                        core.Trade.user_id == user.id,
+                        core.Trade.status == "CLOSED",
+                        core.Trade.close_reason != "MANUAL",
+                    ).order_by(core.desc(core.Trade.closed_at)).limit(3)).all()
+                    if guard_reason is None and len(recent_closed) == 3 and all(
+                        (t.gross_realized - t.entry_fee - t.exit_fee_total + t.funding_pnl) < 0
+                        for t in recent_closed
+                    ):
+                        last_loss = int(recent_closed[0].closed_at or 0)
+                        if now - last_loss < 6 * 3600:
+                            guard_reason = "Three consecutive strategy losses; 6-hour entry cooldown active"
+                    if guard_reason:
+                        marker = f"GUARD_SKIP|{item['symbol']}|{item['interval']}|{item['side']}|{item['strategy']}|{candle_id}|{guard_reason}"
+                        seen_guard = db.scalar(core.select(core.AuditEvent.id).where(
+                            core.AuditEvent.user_id == user.id,
+                            core.AuditEvent.category == "AUTO_ENTRY",
+                            core.AuditEvent.message == marker,
+                        ).limit(1))
+                        if not seen_guard:
+                            core.add_audit(db, "AUTO_ENTRY", "WARNING", marker, user.id)
+                        continue
+
                     duplicate = db.scalar(core.select(core.Trade.id).where(
                         core.Trade.user_id == user.id,
                         core.Trade.symbol == item["symbol"],

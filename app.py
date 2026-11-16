@@ -235,7 +235,7 @@ class SettingsBody(BaseModel):
     auto_trade: bool | None = None
     risk_pct: float | None = Field(default=None, ge=0.25, le=2.0)
     max_total_risk_pct: float | None = Field(default=None, ge=1.0, le=5.0)
-    max_positions: int | None = Field(default=None, ge=1, le=3)
+    max_positions: int | None = Field(default=None, ge=1, le=10)
     notifications: bool | None = None
     reduced_motion: bool | None = None
     sound: bool | None = None
