@@ -13,7 +13,7 @@ import mirage_strategy_v12 as strategy
 def make_trend_candles(count=180, *, volume_spike=True):
     candles = []
     for i in range(count):
-        close = 100 + 0.02 * i + math.sin(i / 4) * 5 + math.sin(i / 13) * 1.1
+        close = 100 + 0.02 * i + math.sin(i / 4) * 4 + math.sin(i / 13) * 0.88
         candles.append({
             "timestamp": float(i),
             "open": close - 0.2,
@@ -81,6 +81,9 @@ def test_original_trend_model_maps_buy_to_futures_long_and_staged_targets():
     assert result["tps"][1] == pytest.approx(result["entry"] + risk * 1.5)
     assert result["tps"][2] == pytest.approx(result["entry"] + risk * 2.0)
     assert result["indicators"]["quality_gate"]["passed"] is True
+    assert result["candle_open_time"] == int(candles[-1]["timestamp"])
+    assert result["indicators"]["quality_gate"]["checks"]["ema_slopes"] is True
+    assert result["indicators"]["quality_gate"]["directional_gap"] >= 5
 
 
 def test_weak_volume_breakout_is_rejected_by_the_quality_gate():
