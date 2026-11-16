@@ -74,7 +74,7 @@ def health_v111():
         float(core.market.status.checked_at or 0),
         now,
     )
-    result["version"] = "1.3.0"
+    result["version"] = "1.4.1"
     result["entry_feed_gate"] = {
         "allowed": not failures,
         "block_reasons": failures,

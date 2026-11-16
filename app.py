@@ -301,11 +301,22 @@ def me(user: User = Depends(auth_user), db: DBSession = Depends(db_dependency)):
     return {"user":user_public(user), "settings":get_settings(db,user.id)}
 
 @app.post("/api/auth/logout")
-def logout(request: Request, response: Response, db: DBSession = Depends(db_dependency), user: User = Depends(auth_user)):
+def logout(request: Request, response: Response, db: DBSession = Depends(db_dependency)):
+    # Logout must be idempotent: stale/missing sessions should still clear the
+    # browser cookie instead of leaving the PWA stuck in a half-authenticated state.
     token = request.cookies.get("mirage_session", "")
-    db.query(UserSession).filter(UserSession.token_hash == hashlib.sha256(token.encode()).hexdigest()).delete()
-    db.commit(); response.delete_cookie("mirage_session", path="/")
-    return {"ok":True}
+    if token:
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        db.query(UserSession).filter(UserSession.token_hash == digest).delete(synchronize_session=False)
+        db.commit()
+    response.delete_cookie(
+        key="mirage_session",
+        path="/",
+        httponly=True,
+        secure=APP_ENV == "production",
+        samesite="lax",
+    )
+    return {"ok": True}
 
 @app.get("/api/health")
 def health():
