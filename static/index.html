@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#050505">
+  <meta name="theme-color" content="#f3f5f8">
   <meta name="description" content="MIRAGE — private futures trading intelligence">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/styles.css?v=12">
+  <link rel="stylesheet" href="/static/styles.css?v=14">
   <title>MIRAGE</title>
 </head>
 <body>
@@ -61,6 +61,14 @@
 
   <div id="modal-root"></div>
   <div id="toast-root" class="toast-root" aria-live="polite"></div>
-  <script src="/static/app.js?v=12" defer></script>
+  <div id="onboarding-screen" class="onboarding-screen hidden">
+    <div class="onboarding-card">
+      <div class="onboarding-brand"><svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 7 83 26 83 60 64 72 64 43 50 51 36 43 36 72 17 60 17 26 50 7Z"/><path d="M50 7 50 24 72 37M50 24 28 37M50 51 50 91"/></svg><span>MIRAGE</span></div>
+      <div id="onboarding-art" class="onboarding-art" data-art="market"><i></i><b></b><em></em></div>
+      <div id="onboarding-copy" class="onboarding-copy"></div>
+      <div class="onboarding-footer"><div id="onboarding-dots" class="onboarding-dots"></div><div><button id="onboarding-skip" class="onboarding-skip" type="button">Пропустить</button><button id="onboarding-next" class="btn primary" type="button">Далее</button></div></div>
+    </div>
+  </div>
+  <script src="/static/app.js?v=14" defer></script>
 </body>
 </html>
