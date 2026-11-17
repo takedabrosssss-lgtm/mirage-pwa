@@ -1,5 +1,13 @@
-const CACHE = 'mirage-shell-v15';
-const SHELL = ['/', '/static/styles.css?v=15', '/static/app.js?v=15', '/static/icon.svg', '/manifest.webmanifest'];
+const CACHE = 'mirage-shell-v16';
+const SHELL = [
+  '/',
+  '/static/styles.css?v=16',
+  '/static/visual-v15.css?v=16',
+  '/static/app.js?v=16',
+  '/static/i18n-v15.js?v=16',
+  '/static/icon.svg',
+  '/manifest.webmanifest'
+];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
   self.skipWaiting();
@@ -15,7 +23,7 @@ self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
-  const isShellAsset = url.pathname === '/' || url.pathname === '/static/app.js' || url.pathname === '/static/styles.css' || url.pathname === '/static/icon.svg' || url.pathname === '/manifest.webmanifest';
+  const isShellAsset = url.pathname === '/' || url.pathname === '/static/app.js' || url.pathname === '/static/styles.css' || url.pathname === '/static/visual-v15.css' || url.pathname === '/static/i18n-v15.js' || url.pathname === '/static/icon.svg' || url.pathname === '/manifest.webmanifest';
   if (!isShellAsset) return;
   event.respondWith((async () => {
     try {
