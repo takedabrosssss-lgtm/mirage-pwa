@@ -1,4 +1,4 @@
-"""MIRAGE v1.1.1 entry-safety overlay with v1.3 protections."""
+"""MIRAGE v1.1.1 entry-safety overlay with coordinated v1.5 engine."""
 from __future__ import annotations
 
 import time
@@ -74,7 +74,7 @@ def health_v111():
         float(core.market.status.checked_at or 0),
         now,
     )
-    result["version"] = "1.4.1"
+    result["version"] = "1.5.0"
     result["entry_feed_gate"] = {
         "allowed": not failures,
         "block_reasons": failures,
@@ -98,6 +98,10 @@ import mirage_safety_v13  # noqa: E402,F401
 
 # v1.4 coordinated UI, analytics, and scan-only controls.
 import mirage_release_v14  # noqa: E402,F401
+
+# v1.5 hybrid signal intelligence overlay. This replaces signal generation only;
+# PHANTOM, the paper executor, risk limits, accounting and position manager stay.
+import mirage_strategy_v15  # noqa: E402,F401
 
 
 if __name__ == "__main__":
