@@ -24,6 +24,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pytest
       - name: Compile application modules
-        run: python -m compileall -q app.py app_v11.py app_v111.py market.py news.py trading.py mirage_v11_fixes.py mirage_db_fix_v12.py mirage_runtime_v12.py mirage_strategy_v12.py mirage_safety_helpers_v13.py mirage_safety_v13.py mirage_release_v14.py
+        run: python -m compileall -q app.py app_v11.py app_v111.py market.py news.py trading.py mirage_v11_fixes.py mirage_db_fix_v12.py mirage_runtime_v12.py mirage_strategy_v12.py mirage_strategy_v15.py mirage_safety_helpers_v13.py mirage_safety_v13.py mirage_release_v14.py
       - name: Run tests
         run: python -m pytest -q
